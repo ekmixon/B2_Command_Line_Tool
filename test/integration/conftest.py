@@ -16,8 +16,11 @@ import pytest
 @pytest.hookimpl
 def pytest_addoption(parser):
     parser.addoption(
-        '--sut', default='%s -m b2' % sys.executable, help='Path to the System Under Test'
+        '--sut',
+        default=f'{sys.executable} -m b2',
+        help='Path to the System Under Test',
     )
+
     parser.addoption('--cleanup', action='store_true', help='Perform full cleanup at exit')
 
 

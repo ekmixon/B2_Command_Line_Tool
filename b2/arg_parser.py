@@ -31,9 +31,11 @@ class RawTextHelpFormatter(argparse.RawTextHelpFormatter):
 
     def add_argument(self, action):
         if isinstance(action, argparse._SubParsersAction) and action.help is not argparse.SUPPRESS:
-            usages = []
-            for choice in self._unique_choice_values(action):
-                usages.append(choice.format_usage())
+            usages = [
+                choice.format_usage()
+                for choice in self._unique_choice_values(action)
+            ]
+
             self.add_text(''.join(usages))
         else:
             super(RawTextHelpFormatter, self).add_argument(action)
@@ -115,9 +117,9 @@ def parse_range(s):
 
 def parse_default_retention_period(s):
     unit_part = '(' + ')|('.join(RetentionPeriod.KNOWN_UNITS) + ')'
-    m = re.match(r'^(?P<duration>\d+) (?P<unit>%s)$' % (unit_part), s)
-    if not m:
+    if m := re.match(r'^(?P<duration>\d+) (?P<unit>%s)$' % (unit_part), s):
+        return RetentionPeriod(**{m['unit']: int(m['duration'])})
+    else:
         raise argparse.ArgumentTypeError(
             'default retention period must be in the form of "X days|years "'
         )
-    return RetentionPeriod(**{m.group('unit'): int(m.group('duration'))})

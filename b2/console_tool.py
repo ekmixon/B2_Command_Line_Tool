@@ -162,7 +162,7 @@ def keyboard_interrupt_handler(signum, frame):
 
 def mixed_case_to_hyphens(s):
     return s[0].lower() + ''.join(
-        c if c.islower() or c.isdigit() else '-' + c.lower() for c in s[1:]
+        c if c.islower() or c.isdigit() else f'-{c.lower()}' for c in s[1:]
     )
 
 
@@ -170,10 +170,7 @@ def apply_or_none(fcn, value):
     """
     If the value is None, return None, otherwise return the result of applying the function to it.
     """
-    if value is None:
-        return None
-    else:
-        return fcn(value)
+    return None if value is None else fcn(value)
 
 
 class DescriptionGetter:
@@ -286,9 +283,9 @@ class DestinationSseMixin(Described):
                 encryption_key_b64 = os.environ.get(B2_DESTINATION_SSE_C_KEY_B64_ENV_VAR)
                 if not encryption_key_b64:
                     raise ValueError(
-                        'Using SSE-C requires providing an encryption key via %s env var' %
-                        B2_DESTINATION_SSE_C_KEY_B64_ENV_VAR
+                        f'Using SSE-C requires providing an encryption key via {B2_DESTINATION_SSE_C_KEY_B64_ENV_VAR} env var'
                     )
+
                 key_id = os.environ.get(B2_DESTINATION_SSE_C_KEY_ID_ENV_VAR)
                 if key_id is None:
                     self._print_stderr(
@@ -298,8 +295,9 @@ class DestinationSseMixin(Described):
                 key = EncryptionKey(secret=base64.b64decode(encryption_key_b64), key_id=key_id)
             else:
                 raise NotImplementedError(
-                    'Unsupported encryption mode for writes: %s' % (mode.value,)
+                    f'Unsupported encryption mode for writes: {mode.value}'
                 )
+
             return EncryptionSetting(mode=mode, algorithm=algorithm, key=key)
 
         return None
@@ -386,21 +384,20 @@ class SourceSseMixin(Described):
         if mode is not None:
             algorithm = apply_or_none(EncryptionAlgorithm, args.sourceServerSideEncryptionAlgorithm)
             key = None
-            if mode == EncryptionMode.SSE_C:
-                encryption_key_b64 = os.environ.get(B2_SOURCE_SSE_C_KEY_B64_ENV_VAR)
-                if not encryption_key_b64:
-                    raise ValueError(
-                        'Using SSE-C requires providing an encryption key via %s env var' %
-                        B2_SOURCE_SSE_C_KEY_B64_ENV_VAR
-                    )
-                key = EncryptionKey(
-                    secret=base64.b64decode(encryption_key_b64), key_id=UNKNOWN_KEY_ID
-                )
-            else:
+            if mode != EncryptionMode.SSE_C:
                 raise NotImplementedError(
-                    'Encryption modes other than %s are not supported in reads' %
-                    (EncryptionMode.SSE_C.value,)
+                    f'Encryption modes other than {EncryptionMode.SSE_C.value} are not supported in reads'
                 )
+
+            encryption_key_b64 = os.environ.get(B2_SOURCE_SSE_C_KEY_B64_ENV_VAR)
+            if not encryption_key_b64:
+                raise ValueError(
+                    f'Using SSE-C requires providing an encryption key via {B2_SOURCE_SSE_C_KEY_B64_ENV_VAR} env var'
+                )
+
+            key = EncryptionKey(
+                secret=base64.b64decode(encryption_key_b64), key_id=UNKNOWN_KEY_ID
+            )
             return EncryptionSetting(mode=mode, algorithm=algorithm, key=key)
 
         return None
@@ -445,9 +442,7 @@ class Command(Described):
     @classmethod
     def name_and_alias(cls):
         name = mixed_case_to_hyphens(cls.__name__)
-        alias = None
-        if '-' in name:
-            alias = name.replace('-', '_')
+        alias = name.replace('-', '_') if '-' in name else None
         return name, alias
 
     @classmethod
@@ -546,7 +541,7 @@ class Command(Described):
         descriptor.write('\n')
 
     def __str__(self):
-        return '%s.%s' % (self.__class__.__module__, self.__class__.__name__)
+        return f'{self.__class__.__module__}.{self.__class__.__name__}'
 
 
 class B2(Command):
@@ -673,7 +668,7 @@ class AuthorizeAccount(Command):
         :return: exit status
         """
         url = REALM_URLS.get(realm, realm)
-        self._print('Using %s' % url)
+        self._print(f'Using {url}')
         try:
             self.api.authorize_account(realm, application_key_id, application_key)
 
@@ -698,7 +693,7 @@ class AuthorizeAccount(Command):
             return 0
         except B2Error as e:
             logger.exception('ConsoleTool account authorization error')
-            self._print_stderr('ERROR: unable to authorize account: ' + str(e))
+            self._print_stderr(f'ERROR: unable to authorize account: {str(e)}')
             return 1
 
     @classmethod
@@ -707,10 +702,7 @@ class AuthorizeAccount(Command):
             return 'dev'
         if args.staging:
             return 'staging'
-        if args.environment:
-            return args.environment
-
-        return os.environ.get(B2_ENVIRONMENT_ENV_VAR, 'production')
+        return args.environment or os.environ.get(B2_ENVIRONMENT_ENV_VAR, 'production')
 
 
 @B2.register_subcommand
@@ -889,9 +881,7 @@ class CopyFileById(
         return 0
 
     def _is_ssec(self, encryption: Optional[EncryptionSetting]):
-        if encryption is not None and encryption.mode == EncryptionMode.SSE_C:
-            return True
-        return False
+        return encryption is not None and encryption.mode == EncryptionMode.SSE_C
 
     def _determine_source_metadata(
         self,
@@ -1023,7 +1013,7 @@ class CreateKey(Command):
             name_prefix=args.namePrefix
         )
 
-        self._print('%s %s' % (application_key.id_, application_key.application_key))
+        self._print(f'{application_key.id_} {application_key.application_key}')
         return 0
 
 
@@ -1220,7 +1210,6 @@ class GetBucket(Command):
         for b in self.api.list_buckets(args.bucketName):
             if not args.showSize:
                 self._print_json(b)
-                return 0
             else:
                 result = b.as_dict()
                 # `files` is a generator. We don't want to collect all of the values from the
@@ -1238,8 +1227,8 @@ class GetBucket(Command):
                 result['fileCount'] = count_size_tuple[0]
                 result['totalSize'] = count_size_tuple[1]
                 self._print_json(result)
-                return 0
-        self._print_stderr('bucket not found: ' + args.bucketName)
+            return 0
+        self._print_stderr(f'bucket not found: {args.bucketName}')
         return 1
 
 
@@ -1327,7 +1316,7 @@ class GetDownloadUrlWithAuth(Command):
             file_name_prefix=args.fileName, valid_duration_in_seconds=args.duration
         )
         base_url = self.api.get_download_url_for_file_name(args.bucketName, args.fileName)
-        url = base_url + '?Authorization=' + auth_token
+        url = f'{base_url}?Authorization={auth_token}'
         self._print(url)
         return 0
 
@@ -1454,9 +1443,12 @@ class ListKeys(Command):
 
         # Make sure we have the map
         if self.bucket_id_to_bucket_name is None:
-            self.bucket_id_to_bucket_name = dict((b.id_, b.name) for b in self.api.list_buckets())
+            self.bucket_id_to_bucket_name = {
+                b.id_: b.name for b in self.api.list_buckets()
+            }
 
-        return self.bucket_id_to_bucket_name.get(bucket_id, 'id=' + bucket_id)
+
+        return self.bucket_id_to_bucket_name.get(bucket_id, f'id={bucket_id}')
 
     def timestamp_display(self, timestamp_or_none):
         """
@@ -1464,10 +1456,9 @@ class ListKeys(Command):
         """
         if timestamp_or_none is None:
             return '-', '-'
-        else:
-            timestamp = timestamp_or_none
-            dt = datetime.datetime.utcfromtimestamp(timestamp / 1000)
-            return dt.strftime('%Y-%m-%d'), dt.strftime('%H:%M:%S')
+        timestamp = timestamp_or_none
+        dt = datetime.datetime.utcfromtimestamp(timestamp / 1000)
+        return dt.strftime('%Y-%m-%d'), dt.strftime('%H:%M:%S')
 
 
 @B2.register_subcommand
@@ -1511,12 +1502,14 @@ class ListUnfinishedLargeFiles(Command):
         bucket = self.api.get_bucket_by_name(args.bucketName)
         for unfinished in bucket.list_unfinished_large_files():
             file_info_text = ' '.join(
-                '%s=%s' % (k, unfinished.file_info[k]) for k in sorted(unfinished.file_info)
+                f'{k}={unfinished.file_info[k]}'
+                for k in sorted(unfinished.file_info)
             )
+
             self._print(
-                '%s %s %s %s' %
-                (unfinished.file_id, unfinished.file_name, unfinished.content_type, file_info_text)
+                f'{unfinished.file_id} {unfinished.file_name} {unfinished.content_type} {file_info_text}'
             )
+
         return 0
 
 
@@ -1877,12 +1870,13 @@ class Sync(DestinationSseMixin, SourceSseMixin, Command):
                 )
             except EmptyDirectory as ex:
                 raise CommandError(
-                    'Directory %s is empty.  Use --allowEmptySource to sync anyway.' % (ex.path,)
+                    f'Directory {ex.path} is empty.  Use --allowEmptySource to sync anyway.'
                 )
+
             except NotADirectory as ex:
-                raise CommandError('%s is not a directory' % (ex.path,))
+                raise CommandError(f'{ex.path} is not a directory')
             except UnableToCreateDirectory as ex:
-                raise CommandError('unable to create directory %s' % (ex.path,))
+                raise CommandError(f'unable to create directory {ex.path}')
         return 0
 
     def get_policies_manager_from_args(self, args):
@@ -1910,8 +1904,6 @@ class Sync(DestinationSseMixin, SourceSseMixin, Command):
 
         if args.compareVersions == 'none':
             compare_version_mode = CompareVersionMode.NONE
-        elif args.compareVersions == 'modTime':
-            compare_version_mode = CompareVersionMode.MODTIME
         elif args.compareVersions == 'size':
             compare_version_mode = CompareVersionMode.SIZE
         else:
@@ -1993,15 +1985,14 @@ class UpdateBucket(DefaultSseMixin, Command):
         super()._setup_parser(parser)  # add parameters from the mixins
 
     def run(self, args):
-        if args.defaultRetentionMode is not None:
-            if args.defaultRetentionMode == 'none':
-                default_retention = NO_RETENTION_BUCKET_SETTING
-            else:
-                default_retention = BucketRetentionSetting(
-                    RetentionMode(args.defaultRetentionMode), args.defaultRetentionPeriod
-                )
-        else:
+        if args.defaultRetentionMode is None:
             default_retention = None
+        elif args.defaultRetentionMode == 'none':
+            default_retention = NO_RETENTION_BUCKET_SETTING
+        else:
+            default_retention = BucketRetentionSetting(
+                RetentionMode(args.defaultRetentionMode), args.defaultRetentionPeriod
+            )
         encryption_setting = self._get_default_sse_setting(args)
         bucket = self.api.get_bucket_by_name(args.bucketName)
         bucket = bucket.update(
@@ -2098,8 +2089,11 @@ class UploadFile(DestinationSseMixin, LegalHoldMixin, FileRetentionSettingMixin,
             legal_hold=legal_hold,
         )
         if not args.quiet:
-            self._print("URL by file name: " + bucket.get_download_url(args.b2FileName))
-            self._print("URL by fileId: " + self.api.get_download_url_for_fileid(file_info.id_))
+            self._print(f"URL by file name: {bucket.get_download_url(args.b2FileName)}")
+            self._print(
+                f"URL by fileId: {self.api.get_download_url_for_fileid(file_info.id_)}"
+            )
+
         self._print_json(file_info)
         return 0
 
@@ -2229,8 +2223,7 @@ class ConsoleTool(object):
         self._setup_logging(args, command, argv)
 
         try:
-            auth_ret = self.authorize_from_env(command_class)
-            if auth_ret:
+            if auth_ret := self.authorize_from_env(command_class):
                 return auth_ret
             return command.run(args)
         except MissingAccountData as e:
@@ -2243,7 +2236,7 @@ class ConsoleTool(object):
             return 1
         except B2Error as e:
             logger.exception('ConsoleTool command error')
-            self._print_stderr('ERROR: %s' % (str(e),))
+            self._print_stderr(f'ERROR: {str(e)}')
             return 1
         except KeyboardInterrupt:
             logger.exception('ConsoleTool command interrupt')
@@ -2307,7 +2300,7 @@ class ConsoleTool(object):
             if attr_value is not None:
                 self._print_file_attribute(label, attr_value)
         for name in sorted(download_version.file_info):
-            self._print_file_attribute('INFO %s' % (name,), download_version.file_info[name])
+            self._print_file_attribute(f'INFO {name}', download_version.file_info[name])
         if download_version.content_sha1 != 'none':
             self._print('Checksum matches')
         return 0
@@ -2316,14 +2309,17 @@ class ConsoleTool(object):
         # TODO: refactor to use "match" syntax after dropping python 3.9 support
         if encryption.mode is EncryptionMode.NONE:
             return 'none'
-        result = 'mode=%s, algorithm=%s' % (encryption.mode.value, encryption.algorithm.value)
+        result = (
+            f'mode={encryption.mode.value}, algorithm={encryption.algorithm.value}'
+        )
+
         if encryption.mode is EncryptionMode.SSE_B2:
             pass
         elif encryption.mode is EncryptionMode.SSE_C:
             if encryption.key.key_id is not None:
-                result += ', key_id=%s' % (encryption.key.key_id,)
+                result += f', key_id={encryption.key.key_id}'
         else:
-            raise ValueError('Unsupported encryption mode: %s' % (encryption.mode,))
+            raise ValueError(f'Unsupported encryption mode: {encryption.mode}')
 
         return result
 
@@ -2338,7 +2334,7 @@ class ConsoleTool(object):
                 datetime.datetime.
                 fromtimestamp(retention.retain_until / 1000, datetime.timezone.utc)
             )
-        raise ValueError('Unsupported retention mode: %s' % (retention.mode,))
+        raise ValueError(f'Unsupported retention mode: {retention.mode}')
 
     def _represent_legal_hold(self, legal_hold: LegalHold):
         if legal_hold in (LegalHold.ON, LegalHold.OFF):
@@ -2347,10 +2343,10 @@ class ConsoleTool(object):
             return '<unauthorized to read>'
         if legal_hold is LegalHold.UNSET:
             return '<unset>'
-        raise ValueError('Unsupported legal hold: %s' % (legal_hold,))
+        raise ValueError(f'Unsupported legal hold: {legal_hold}')
 
     def _print_file_attribute(self, label, value):
-        self._print((label + ':').ljust(20), value)
+        self._print(f'{label}:'.ljust(20), value)
 
     @classmethod
     def _setup_logging(cls, args, command, argv):
@@ -2418,7 +2414,7 @@ class InvalidArgument(B2Error):
         self.message = message
 
     def __str__(self):
-        return "%s %s" % (self.parameter_name, self.message)
+        return f"{self.parameter_name} {self.message}"
 
 
 def main():
@@ -2431,7 +2427,13 @@ def main():
     )
     ct = ConsoleTool(b2_api=b2_api, stdout=sys.stdout, stderr=sys.stderr)
     exit_status = ct.run_command(sys.argv)
-    logger.info('\\\\ %s %s %s //', SEPARATOR, ('exit=%s' % exit_status).center(8), SEPARATOR)
+    logger.info(
+        '\\\\ %s %s %s //',
+        SEPARATOR,
+        f'exit={exit_status}'.center(8),
+        SEPARATOR,
+    )
+
 
     # I haven't tracked down the root cause yet, but in Python 2.7, the futures
     # packages is hanging on exit sometimes, waiting for a thread to finish.

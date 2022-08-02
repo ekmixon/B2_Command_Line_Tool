@@ -94,8 +94,9 @@ def parse_args(tests):
     parser.add_argument(
         '--command',
         help='Specifie a command tu run. If not specified, the tests will run from the source',
-        default='%s -m b2' % sys.executable
+        default=f'{sys.executable} -m b2',
     )
+
 
     args = parser.parse_args()
     if 'all' in args.tests:
@@ -275,12 +276,12 @@ class Api:
     def _should_remove_bucket(self, bucket: Bucket):
         if bucket.name.startswith(self.this_run_bucket_name_prefix):
             return True
-        if bucket.name.startswith(self.general_bucket_name_prefix):
-            if BUCKET_CREATED_AT_MILLIS in bucket.bucket_info:
-                if int(bucket.bucket_info[BUCKET_CREATED_AT_MILLIS]
-                      ) < current_time_millis() - ONE_HOUR_MILLIS:
-                    return True
-        return False
+        return bool(
+            bucket.name.startswith(self.general_bucket_name_prefix)
+            and BUCKET_CREATED_AT_MILLIS in bucket.bucket_info
+            and int(bucket.bucket_info[BUCKET_CREATED_AT_MILLIS])
+            < current_time_millis() - ONE_HOUR_MILLIS
+        )
 
     def clean_buckets(self):
         buckets = self.api.list_buckets()
@@ -302,18 +303,19 @@ class Api:
                         elif file_version_info.file_retention.mode == RetentionMode.COMPLIANCE:
                             if file_version_info.file_retention.retain_until > current_time_millis():  # yapf: disable
                                 print(
-                                    'File version: %s cannot be removed due to compliance mode retention'
-                                    % (file_version_info.id_,)
+                                    f'File version: {file_version_info.id_} cannot be removed due to compliance mode retention'
                                 )
+
                                 files_leftover = True
                                 continue
-                        elif file_version_info.file_retention.mode == RetentionMode.NONE:
-                            pass
-                        else:
+                        elif (
+                            file_version_info.file_retention.mode
+                            != RetentionMode.NONE
+                        ):
                             raise ValueError(
-                                'Unknown retention mode: %s' %
-                                (file_version_info.file_retention.mode,)
+                                f'Unknown retention mode: {file_version_info.file_retention.mode}'
                             )
+
                     if file_version_info.legal_hold.is_on():
                         print('Removing legal hold from file version:', file_version_info.id_)
                         self.api.update_file_legal_hold(
@@ -326,9 +328,9 @@ class Api:
                         )
                     except FileNotPresent:
                         print(
-                            'It seems that file version %s has already been removed' %
-                            (file_version_info.id_,)
+                            f'It seems that file version {file_version_info.id_} has already been removed'
                         )
+
 
                 if files_leftover:
                     print('Unable to remove bucket because some retained files remain')
@@ -337,7 +339,7 @@ class Api:
                     try:
                         self.api.delete_bucket(bucket)
                     except BucketIdNotFound:
-                        print('It seems that bucket %s has already been removed' % (bucket.name,))
+                        print(f'It seems that bucket {bucket.name} has already been removed')
                 print()
 
 
@@ -355,14 +357,14 @@ class EnvVarTestContext:
         src = self.account_info_file_name
         dst = os.path.join(tempfile.gettempdir(), 'b2_account_info')
         shutil.copyfile(src, dst)
-        shutil.move(src, src + '.bkup')
+        shutil.move(src, f'{src}.bkup')
         os.environ[self.ENV_VAR] = dst
         return dst
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         os.remove(os.environ.get(self.ENV_VAR))
         fname = self.account_info_file_name
-        shutil.move(fname + '.bkup', fname)
+        shutil.move(f'{fname}.bkup', fname)
         if os.environ.get(self.ENV_VAR) is not None:
             del os.environ[self.ENV_VAR]
 
@@ -420,11 +422,13 @@ class CommandLine:
                 print('FAILED because of stderr')
                 print(stderr)
                 _exit(1)
-        if expected_pattern is not None:
-            if re.search(expected_pattern, stdout) is None:
-                print('STDOUT:')
-                print(stdout)
-                error_and_exit('did not match pattern: ' + expected_pattern)
+        if (
+            expected_pattern is not None
+            and re.search(expected_pattern, stdout) is None
+        ):
+            print('STDOUT:')
+            print(stdout)
+            error_and_exit(f'did not match pattern: {expected_pattern}')
         return stdout
 
     def should_succeed_json(self, args, additional_env: Optional[dict] = None):
@@ -448,7 +452,7 @@ class CommandLine:
             print(expected_pattern)
             # quotes are helpful when reading fail logs, they help find trailing white spaces etc.
             print("'%s'" % (stdout + stderr,))
-            error_and_exit('did not match pattern: ' + str(expected_pattern))
+            error_and_exit(f'did not match pattern: {str(expected_pattern)}')
 
     def reauthorize(self):
         """Clear and authorize again to the account."""
@@ -652,7 +656,7 @@ def key_restrictions_test(b2_tool, bucket_name):
     second_bucket_name = b2_tool.generate_bucket_name()
     b2_tool.should_succeed(['create-bucket', second_bucket_name, 'allPublic'],)
 
-    key_one_name = 'clt-testKey-01' + random_hex(6)
+    key_one_name = f'clt-testKey-01{random_hex(6)}'
     created_key_stdout = b2_tool.should_succeed(
         [
             'create-key',
@@ -669,7 +673,7 @@ def key_restrictions_test(b2_tool, bucket_name):
     b2_tool.should_succeed(['get-bucket', bucket_name],)
     b2_tool.should_succeed(['get-bucket', second_bucket_name],)
 
-    key_two_name = 'clt-testKey-02' + random_hex(6)
+    key_two_name = f'clt-testKey-02{random_hex(6)}'
     created_key_two_stdout = b2_tool.should_succeed(
         [
             'create-key',
@@ -687,10 +691,16 @@ def key_restrictions_test(b2_tool, bucket_name):
     b2_tool.should_succeed(['get-bucket', bucket_name],)
     b2_tool.should_succeed(['ls', bucket_name],)
 
-    failed_bucket_err = r'ERROR: Application key is restricted to bucket: ' + bucket_name
+    failed_bucket_err = (
+        f'ERROR: Application key is restricted to bucket: {bucket_name}'
+    )
+
     b2_tool.should_fail(['get-bucket', second_bucket_name], failed_bucket_err)
 
-    failed_list_files_err = r'ERROR: Application key is restricted to bucket: ' + bucket_name
+    failed_list_files_err = (
+        f'ERROR: Application key is restricted to bucket: {bucket_name}'
+    )
+
     b2_tool.should_fail(['ls', second_bucket_name], failed_list_files_err)
 
     # reauthorize with more capabilities for clean up
@@ -814,7 +824,7 @@ def find_file_id(list_of_files, file_name):
     for file in list_of_files:
         if file['fileName'] == file_name:
             return file['fileId']
-    assert False, 'file not found: %s' % (file_name,)
+    assert False, f'file not found: {file_name}'
 
 
 def encryption_summary(sse_dict, file_info):
@@ -826,10 +836,10 @@ def encryption_summary(sse_dict, file_info):
     )
     algorithm = sse_dict.get('algorithm')
     if algorithm is not None:
-        encryption += ':' + algorithm
+        encryption += f':{algorithm}'
     if sse_dict['mode'] == 'SSE-C':
         sse_c_key_id = file_info.get(SSE_C_KEY_ID_FILE_INFO_KEY_NAME)
-        encryption += '?%s=%s' % (SSE_C_KEY_ID_FILE_INFO_KEY_NAME, sse_c_key_id)
+        encryption += f'?{SSE_C_KEY_ID_FILE_INFO_KEY_NAME}={sse_c_key_id}'
 
     return encryption
 

@@ -130,9 +130,11 @@ class BaseConsoleToolTest(TestBase):
     def assertListOfDictsIsContained(self, list_of_subsets, list_of_supersets):
         """Performs the same assertion as assertDictIsContained, but for dicts in two lists itertively"""
         self.assertEqual(len(list_of_subsets), len(list_of_supersets))
-        truncated_list_of_supersets = []
-        for subset, superset in zip(list_of_subsets, list_of_supersets):
-            truncated_list_of_supersets.append({k: v for k, v in superset.items() if k in subset})
+        truncated_list_of_supersets = [
+            {k: v for k, v in superset.items() if k in subset}
+            for subset, superset in zip(list_of_subsets, list_of_supersets)
+        ]
+
         self.assertEqual(list_of_subsets, truncated_list_of_supersets)
 
     def _authorize_account(self):
@@ -199,7 +201,7 @@ class BaseConsoleToolTest(TestBase):
         if expected_json_in_stdout is not None:
             json_match = self.json_pattern.match(actual_stdout)
             if not json_match:
-                self.fail('EXPECTED TO FIND A JSON IN: ' + repr(actual_stdout))
+                self.fail(f'EXPECTED TO FIND A JSON IN: {repr(actual_stdout)}')
 
             found_json = json.loads(json_match.group('dict_json') or json_match.group('list_json'))
             if json_match.group('dict_json'):
@@ -577,7 +579,7 @@ class TestConsoleTool(BaseConsoleToolTest):
 
         # Make a key with validDurationInSeconds outside of range
         expected_stderr = 'ERROR: Bad request: valid duration must be greater than 0, ' \
-                          'and less than 1000 days in seconds\n'
+                              'and less than 1000 days in seconds\n'
         self._run_command(
             ['create-key', '--duration', '0', 'goodKeyName', capabilities_with_commas], '',
             expected_stderr, 1
@@ -596,13 +598,17 @@ class TestConsoleTool(BaseConsoleToolTest):
         )
         self._run_command(
             [
-                'create-key', '--bucket', 'my-bucket-a', 'goodKeyName-Two',
-                capabilities_with_commas + ',readBucketEncryption'
+                'create-key',
+                '--bucket',
+                'my-bucket-a',
+                'goodKeyName-Two',
+                f'{capabilities_with_commas},readBucketEncryption',
             ],
             'appKeyId1 appKey1\n',
             '',
             0,
         )
+
         self._run_command(
             [
                 'create-key', '--bucket', 'my-bucket-b', 'goodKeyName-Three',
@@ -858,27 +864,23 @@ class TestConsoleTool(BaseConsoleToolTest):
                     "fileId": "9998",
                     "fileInfo": {},
                     "fileName": "file1.txt",
-                    "serverSideEncryption": {
-                        "mode": "none"
-                    },
+                    "serverSideEncryption": {"mode": "none"},
                     "size": 0,
-                    "uploadTimestamp": 5001
-                }, {
+                    "uploadTimestamp": 5001,
+                },
+                {
                     "action": "upload",
                     "contentSha1": "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed",
                     "contentType": "b2/x-auto",
                     "fileId": "9999",
-                    "fileInfo": {
-                        "src_last_modified_millis": str(mod_time_str)
-                    },
+                    "fileInfo": {"src_last_modified_millis": mod_time_str},
                     "fileName": "file1.txt",
-                    "serverSideEncryption": {
-                        "mode": "none"
-                    },
+                    "serverSideEncryption": {"mode": "none"},
                     "size": 11,
-                    "uploadTimestamp": 5000
-                }
+                    "uploadTimestamp": 5000,
+                },
             ]
+
 
             self._run_command(
                 ['ls', '--json', '--versions', 'my-bucket'],
@@ -1036,28 +1038,26 @@ class TestConsoleTool(BaseConsoleToolTest):
                     "fileId": "9998",
                     "fileInfo": {},
                     "fileName": "file1.txt",
-                    "serverSideEncryption": {
-                        "mode": "none"
-                    },
+                    "serverSideEncryption": {"mode": "none"},
                     "size": 0,
-                    "uploadTimestamp": 5001
-                }, {
+                    "uploadTimestamp": 5001,
+                },
+                {
                     "action": "upload",
                     "contentSha1": "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed",
                     "contentType": "b2/x-auto",
                     "fileId": "9999",
-                    "fileInfo": {
-                        "src_last_modified_millis": str(mod_time_str)
-                    },
+                    "fileInfo": {"src_last_modified_millis": mod_time_str},
                     "fileName": "file1.txt",
                     "serverSideEncryption": {
                         "algorithm": "AES256",
-                        "mode": "SSE-B2"
+                        "mode": "SSE-B2",
                     },
                     "size": 11,
-                    "uploadTimestamp": 5000
-                }
+                    "uploadTimestamp": 5000,
+                },
             ]
+
 
             self._run_command(
                 ['ls', '--json', '--versions', 'my-bucket'],
@@ -1327,16 +1327,13 @@ class TestConsoleTool(BaseConsoleToolTest):
                 "contentSha1": "none",
                 "contentType": "b2/x-auto",
                 "fileId": "9999",
-                "fileInfo": {
-                    "src_last_modified_millis": str(mod_time_str)
-                },
+                "fileInfo": {"src_last_modified_millis": mod_time_str},
                 "fileName": "test.txt",
-                "serverSideEncryption": {
-                    "mode": "none"
-                },
+                "serverSideEncryption": {"mode": "none"},
                 "size": 600,
-                "uploadTimestamp": 5000
+                "uploadTimestamp": 5000,
             }
+
 
             self._run_command(
                 [
@@ -1368,17 +1365,13 @@ class TestConsoleTool(BaseConsoleToolTest):
                 "contentSha1": "none",
                 "contentType": "b2/x-auto",
                 "fileId": "9999",
-                "fileInfo": {
-                    "src_last_modified_millis": str(mod_time_str)
-                },
+                "fileInfo": {"src_last_modified_millis": mod_time_str},
                 "fileName": "test.txt",
-                "serverSideEncryption": {
-                    "algorithm": "AES256",
-                    "mode": "SSE-B2"
-                },
+                "serverSideEncryption": {"algorithm": "AES256", "mode": "SSE-B2"},
                 "size": 600,
-                "uploadTimestamp": 5000
+                "uploadTimestamp": 5000,
             }
+
 
             self._run_command(
                 [
@@ -1472,16 +1465,13 @@ class TestConsoleTool(BaseConsoleToolTest):
                 "contentSha1": "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed",
                 "contentType": "b2/x-auto",
                 "fileId": "9999",
-                "fileInfo": {
-                    "src_last_modified_millis": str(mod_time_str)
-                },
+                "fileInfo": {"src_last_modified_millis": mod_time_str},
                 "fileName": "file1.txt",
-                "serverSideEncryption": {
-                    "mode": "none"
-                },
+                "serverSideEncryption": {"mode": "none"},
                 "size": 11,
-                "uploadTimestamp": 5000
+                "uploadTimestamp": 5000,
             }
+
             self._run_command(
                 ['upload-file', '--noProgress', 'my-bucket', local_file1, 'file1.txt'],
                 expected_json_in_stdout=expected_json,
@@ -1969,13 +1959,19 @@ class TestConsoleTool(BaseConsoleToolTest):
         file_prefix = 'some/file/prefix/'
         self._run_command(
             [
-                'create-key', '--bucket', bucket_name, '--namePrefix', file_prefix, 'my-key',
-                capabilities
+                'create-key',
+                '--bucket',
+                bucket_name,
+                '--namePrefix',
+                file_prefix,
+                'my-key',
+                capabilities,
             ],
-            app_key_id + ' ' + app_key + '\n',
+            f'{app_key_id} {app_key}' + '\n',
             '',
             0,
         )
+
 
         self._run_command_ignore_output(['authorize-account', app_key_id, app_key])
 
@@ -1998,9 +1994,9 @@ class TestConsoleTool(BaseConsoleToolTest):
 
         # Test that the application key info gets added to the unauthorized error message.
         expected_create_key_stderr = "ERROR: unauthorized for application key " \
-                                     "with capabilities 'listBuckets,readFiles', " \
-                                     "restricted to bucket 'restrictedBucket', " \
-                                     "restricted to files that start with 'some/file/prefix/' (unauthorized)\n"
+                                         "with capabilities 'listBuckets,readFiles', " \
+                                         "restricted to bucket 'restrictedBucket', " \
+                                         "restricted to files that start with 'some/file/prefix/' (unauthorized)\n"
         self._run_command(
             ['create-key', 'goodKeyName-One', 'readFiles,listBuckets'],
             '',
